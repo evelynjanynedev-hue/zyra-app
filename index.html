@@ -50,31 +50,67 @@
 </main>
 
 <script>
-  const FONTE = "https://raw.githubusercontent.com/evelynjanynedev-hue/zyra-app/main/url.json";
+  const REPO = "evelynjanynedev-hue/zyra-app";
+  const FONTES = [
+    `https://api.github.com/repos/${REPO}/contents/url.json?t=${Date.now()}`,
+    `https://raw.githubusercontent.com/${REPO}/main/url.json?t=${Date.now()}`,
+  ];
 
   const status = document.getElementById("status");
   const manual = document.getElementById("manual");
   const retry = document.getElementById("retry");
 
-  async function abrir() {
-    status.textContent = "Conectando à instância atual…";
-    retry.disabled = true;
-    try {
-      const resposta = await fetch(FONTE + "?t=" + Date.now(), { cache: "no-store" });
-      if (!resposta.ok) throw new Error("HTTP " + resposta.status);
-      const dados = await resposta.json();
-      const url = String(dados.url || "");
-      if (!/^https:\/\/[^\s]+$/.test(url)) throw new Error("URL inválida");
-
-      manual.href = url;
-      manual.hidden = false;
-      status.textContent = "Redirecionando…";
-      window.location.replace(url);
-    } catch (erro) {
-      status.textContent = "Não consegui alcançar o servidor agora. Tente de novo em instantes.";
-    } finally {
-      retry.disabled = false;
+  async function descobrirUrl() {
+    for (const fonte of FONTES) {
+      try {
+        const resposta = await fetch(fonte, {
+          cache: "no-store",
+          headers: { Accept: fonte.includes("api.github.com") ? "application/vnd.github.raw" : "application/json" },
+        });
+        if (!resposta.ok) continue;
+        const dados = await resposta.json();
+        const url = String(dados.url || "");
+        if (/^https:\/\/[^\s]+$/.test(url)) return url;
+      } catch (_) {
+        /* tenta a próxima fonte */
+      }
     }
+    return null;
+  }
+
+  async function noAr(url) {
+    try {
+      const resposta = await fetch(url + "/api/health", { cache: "no-store" });
+      return resposta.ok;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function abrir() {
+    retry.disabled = true;
+    for (let tentativa = 1; tentativa <= 10; tentativa++) {
+      status.textContent = tentativa === 1
+        ? "Conectando à instância atual…"
+        : `Ainda conectando… (${tentativa}/10)`;
+
+      const url = await descobrirUrl();
+      if (url) {
+        manual.href = url;
+        manual.hidden = false;
+        if (await noAr(url)) {
+          status.textContent = "Redirecionando…";
+          window.location.replace(url);
+          retry.disabled = false;
+          return;
+        }
+      }
+
+      await new Promise((r) => setTimeout(r, 4000));
+    }
+
+    status.textContent = "O servidor está reconectando. Tente de novo em instantes.";
+    retry.disabled = false;
   }
 
   retry.addEventListener("click", abrir);
