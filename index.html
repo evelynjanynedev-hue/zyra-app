@@ -52,6 +52,7 @@
 <script>
   const REPO = "evelynjanynedev-hue/zyra-app";
   const FONTES = [
+    `https://evelynjanynedev-hue.github.io/zyra-app/url.json?t=${Date.now()}`,
     `https://api.github.com/repos/${REPO}/contents/url.json?t=${Date.now()}`,
     `https://raw.githubusercontent.com/${REPO}/main/url.json?t=${Date.now()}`,
   ];
@@ -65,6 +66,7 @@
       try {
         const resposta = await fetch(fonte, {
           cache: "no-store",
+          signal: AbortSignal.timeout(6000),
           headers: { Accept: fonte.includes("api.github.com") ? "application/vnd.github.raw" : "application/json" },
         });
         if (!resposta.ok) continue;
@@ -80,7 +82,10 @@
 
   async function noAr(url) {
     try {
-      const resposta = await fetch(url + "/api/health", { cache: "no-store" });
+      const resposta = await fetch(url + "/api/health", {
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      });
       return resposta.ok;
     } catch (_) {
       return false;
